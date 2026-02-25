@@ -1,0 +1,14 @@
+{
+  "uuid": "gnomeassistant@tinchodin.uy",
+  "name": "GNOME Assistant",
+  "description": "Control de Home Assistant",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49"
+  ],
+  "url": "",
+  "settings-schema": "org.gnome.shell.extensions.gnomeassistant"
+}

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.gnomeassistant" path="/org/gnome/shell/extensions/gnomeassistant/">
+    
+    <key name="ha-url" type="s">
+      <default>""</default>
+      <summary>URL de Home Assistant</summary>
+      <description>La dirección de tu servidor, ej: http://192.168.1.100:8123</description>
+    </key>
+    
+    <key name="ha-token" type="s">
+      <default>""</default>
+      <summary>Token de Acceso (Long-Lived)</summary>
+      <description>El token generado desde tu perfil en Home Assistant</description>
+    </key>
+
+  </schema>
+</schemalist>
