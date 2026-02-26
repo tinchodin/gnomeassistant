@@ -14,5 +14,23 @@
       <description>El token generado desde tu perfil en Home Assistant</description>
     </key>
 
+    <key name="ignored-items" type="s">
+      <default>""</default>
+      <summary>Elementos ignorados</summary>
+      <description>Áreas o entity_ids separados por coma (ej: light.patio, Otros)</description>
+    </key>
+
+    <key name="discovered-areas" type="s">
+      <default>""</default>
+      <summary>Áreas descubiertas</summary>
+      <description>Lista interna de áreas encontradas por la extensión</description>
+    </key>
+
+    <key name="custom-icons" type="s">
+      <default>"{}"</default>
+      <summary>Íconos personalizados</summary>
+      <description>Mapeo JSON de áreas a íconos seleccionados por el usuario</description>
+    </key>
+
   </schema>
 </schemalist>
