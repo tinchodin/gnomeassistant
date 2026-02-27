@@ -1,1 +1,13 @@
-/* Add your custom extension styling here */
+.ha-quick-settings-separator {
+  spacing: 6px;
+  padding: 0;
+}
+
+.ha-quick-settings-separator-icon {
+  icon-size: 14px;
+  opacity: 0.7;
+}
+
+.ha-quick-settings-home-button {
+  padding: 6px;
+}

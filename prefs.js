@@ -4,7 +4,6 @@ import Gtk from 'gi://Gtk';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 // Built-in Adwaita icons suitable for common home areas
-// De-duplicate by icon id to avoid repeated entries in the dropdown.
 const ICONS = (() => {
     const rawIcons = [
         { id: 'emoji-objects-symbolic', name: 'Default' },
@@ -24,8 +23,6 @@ const ICONS = (() => {
         { id: 'network-server-symbolic', name: 'Network / Router' },
         { id: 'system-users-symbolic', name: 'Common Area' },
         { id: 'night-light-symbolic', name: 'Bedroom (Night)' },
-
-        // Requested icons
         { id: 'dialog-password', name: 'Password / Lock' },
         { id: 'channel-secure', name: 'Secure Channel' },
         { id: 'network-cellular-gprs', name: 'Cellular (GPRS)' },
@@ -33,8 +30,6 @@ const ICONS = (() => {
         { id: 'user-trash', name: 'Trash' },
         { id: 'audio-x-generic', name: 'Audio File' },
         { id: 'document-open-recent', name: 'Recent Documents' },
-
-        // Weather icons (all weather-*symbolic found in Adwaita)
         { id: 'weather-clear-symbolic', name: 'Weather: Clear' },
         { id: 'weather-clear-night-symbolic', name: 'Weather: Clear Night' },
         { id: 'weather-few-clouds-symbolic', name: 'Weather: Few Clouds' },
@@ -123,6 +118,18 @@ export default class GnomeAssistantPreferences extends ExtensionPreferences {
         });
         ignoreGroup.add(ignoreRow);
 
+        const quickSettingsGroup = new Adw.PreferencesGroup({
+            title: 'Quick Settings',
+            description: 'Visual options for panel quick settings.'
+        });
+        page.add(quickSettingsGroup);
+
+        const separatorRow = new Adw.SwitchRow({
+            title: 'Show separator',
+            subtitle: 'Display a divider with a home icon before extension controls'
+        });
+        quickSettingsGroup.add(separatorRow);
+
         // Group 3: Icon customization
         const discoveredStr = settings.get_string('discovered-areas');
         const areas = Array.from(new Set((discoveredStr ? discoveredStr.split(',') : []).map(a => a.trim()).filter(a => a !== '' && a !== 'Other')));
@@ -177,5 +184,6 @@ export default class GnomeAssistantPreferences extends ExtensionPreferences {
         settings.bind('ha-url', urlRow, 'text', Gio.SettingsBindFlags.DEFAULT);
         settings.bind('ha-token', tokenRow, 'text', Gio.SettingsBindFlags.DEFAULT);
         settings.bind('ignored-items', ignoreRow, 'text', Gio.SettingsBindFlags.DEFAULT);
+        settings.bind('show-separator', separatorRow, 'active', Gio.SettingsBindFlags.DEFAULT);
     }
 }

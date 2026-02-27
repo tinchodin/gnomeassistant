@@ -563,6 +563,8 @@ export default class HomeAssistantExtension extends Extension {
         this._settings = this.getSettings();
         this._areaToggles = [];
         this._indicator = null;
+        this._quickSettingsSeparator = null;
+        this._separatorSignalId = null;
 
         this._buildLayout();
 
@@ -590,9 +592,19 @@ export default class HomeAssistantExtension extends Extension {
             this._destroyLayout();
             this._buildLayout();
         });
+
+        this._separatorSignalId = this._settings.connect('changed::show-separator', () => {
+            this._destroyLayout();
+            this._buildLayout();
+        });
     }
 
     _destroyLayout() {
+        if (this._quickSettingsSeparator) {
+            this._quickSettingsSeparator.destroy();
+            this._quickSettingsSeparator = null;
+        }
+
         if (this._indicator) {
             this._areaToggles.forEach(t => t.destroy());
             this._areaToggles = [];
@@ -605,6 +617,10 @@ export default class HomeAssistantExtension extends Extension {
         let url = this._settings.get_string('ha-url');
         let token = this._settings.get_string('ha-token');
         if (!url || !token) return;
+        let showSeparator = true;
+        try {
+            showSeparator = this._settings.get_boolean('show-separator');
+        } catch (e) {}
 
         let ignoredStr = "";
         let customIcons = {};
@@ -668,8 +684,65 @@ export default class HomeAssistantExtension extends Extension {
 
             Main.panel.statusArea.quickSettings.addExternalIndicator(this._indicator);
 
+            if (showSeparator && this._areaToggles.length > 0) {
+                const homeButton = new St.Button({
+                    style_class: 'icon-button flat ha-quick-settings-home-button',
+                    can_focus: true,
+                    reactive: true,
+                    track_hover: true,
+                    y_align: Clutter.ActorAlign.CENTER,
+                    child: new St.Icon({
+                        icon_name: 'go-home-symbolic',
+                        style_class: 'ha-quick-settings-separator-icon popup-menu-icon',
+                    }),
+                });
+                homeButton.connect('clicked', () => this._openHomeAssistantUrl());
+
+                const line = new St.Widget({
+                    style_class: 'popup-separator-menu-item-separator',
+                    x_expand: true,
+                    y_align: Clutter.ActorAlign.CENTER,
+                });
+
+                this._quickSettingsSeparator = new St.BoxLayout({
+                    style_class: 'popup-separator-menu-item ha-quick-settings-separator',
+                    reactive: false,
+                    can_focus: false,
+                    track_hover: false,
+                    x_expand: true,
+                });
+                this._quickSettingsSeparator.add_child(homeButton);
+                this._quickSettingsSeparator.add_child(line);
+
+                Main.panel.statusArea.quickSettings.menu.insertItemBefore(
+                    this._quickSettingsSeparator,
+                    this._areaToggles[0],
+                    2
+                );
+            }
+
         } catch (e) {
             console.error(`[HA Ext] _buildLayout failed: ${e.message}`);
+        }
+    }
+
+    _openHomeAssistantUrl() {
+        let url = '';
+        try {
+            url = this._settings.get_string('ha-url').trim();
+        } catch (e) {
+            return;
+        }
+
+        if (!url) return;
+        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) {
+            url = `http://${url}`;
+        }
+
+        try {
+            Gio.app_info_launch_default_for_uri(url, global.create_app_launch_context(0, -1));
+        } catch (e) {
+            console.error(`[HA Ext] Failed to open Home Assistant URL: ${e.message}`);
         }
     }
 
@@ -685,6 +758,10 @@ export default class HomeAssistantExtension extends Extension {
         if (this._iconsSignalId) {
             this._settings.disconnect(this._iconsSignalId);
             this._iconsSignalId = null;
+        }
+        if (this._separatorSignalId) {
+            this._settings.disconnect(this._separatorSignalId);
+            this._separatorSignalId = null;
         }
         this._destroyLayout();
         this._settings = null;

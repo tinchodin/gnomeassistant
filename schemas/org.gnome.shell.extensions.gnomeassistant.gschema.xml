@@ -32,5 +32,11 @@
       <description>JSON mapping of areas to user-selected icons</description>
     </key>
 
+    <key name="show-separator" type="b">
+      <default>true</default>
+      <summary>Show quick settings separator</summary>
+      <description>Display a separator between native quick settings and Home Assistant controls</description>
+    </key>
+
   </schema>
 </schemalist>
