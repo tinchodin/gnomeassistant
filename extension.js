@@ -102,15 +102,28 @@ class HAAreaToggle extends QuickMenuToggle {
 
         this._areaEntities.forEach(entity => {
             let name = entity.attributes.friendly_name || entity.entity_id;
+            let isLight = entity.entity_id.startsWith('light.');
             let isClimate = entity.entity_id.startsWith('climate.');
-            let isOn = isClimate ? (entity.state !== 'off' && entity.state !== 'unavailable') : (entity.state === 'on');
+            let isMedia = entity.entity_id.startsWith('media_player.');
+            let isOn = (isClimate || isMedia) ? (entity.state !== 'off' && entity.state !== 'unavailable') : (entity.state === 'on');
             
-            if (!isClimate && isOn) anyLightOn = true;
+            if (isLight && isOn) anyLightOn = true;
 
             let attrs = entity.attributes || {};
             let switchItem = new PopupMenu.PopupSwitchMenuItem(name, isOn);
             
-            // Reemplazo seguro de activate para evitar cierre de menú
+            // CORRECCIÓN: Aplicamos los íconos exactos que pediste y forzamos el tamaño a 16px
+            let deviceIconName = 'emoji-objects-symbolic'; // Bombilla de luz
+            if (isClimate) deviceIconName = 'power-profile-power-saver-symbolic';
+            if (isMedia) deviceIconName = 'applications-multimedia-symbolic';
+
+            let deviceIcon = new St.Icon({
+                icon_name: deviceIconName,
+                icon_size: 16,
+                style_class: 'popup-menu-icon'
+            });
+            switchItem.insert_child_at_index(deviceIcon, 0);
+
             switchItem.activate = function(event) {
                 this.toggle();
             };
@@ -134,12 +147,12 @@ class HAAreaToggle extends QuickMenuToggle {
             let sliderItem = null;
             let slider = null;
             let tempLabel = null;
-            let brightLabel = null; // NUEVO: Para el % de luces
+            let brightLabel = null;
             let modeItem = null;
             let modeButtons = null;
+            let playIcon = null;
 
-            if (!isClimate) {
-                // --- LÓGICA DE LUCES (Brillo) ---
+            if (isLight) {
                 let supportsBrightness = false;
                 if ('brightness' in attrs && attrs.brightness !== null) supportsBrightness = true;
                 else if (attrs.supported_color_modes && attrs.supported_color_modes.some(m => m !== 'onoff' && m !== 'unknown')) supportsBrightness = true;
@@ -154,7 +167,6 @@ class HAAreaToggle extends QuickMenuToggle {
                     slider = new Slider(currentBrightness / 255);
                     slider.x_expand = true;
 
-                    // NUEVO: Etiqueta de porcentaje de brillo
                     let percent = Math.round((currentBrightness / 255) * 100);
                     brightLabel = new St.Label({
                         text: `${percent}%`,
@@ -166,7 +178,6 @@ class HAAreaToggle extends QuickMenuToggle {
                     slider.connect('notify::value', () => {
                         if (this._syncing) return;
 
-                        // Actualizar texto en tiempo real
                         let p = Math.round(slider.value * 100);
                         brightLabel.set_text(`${p}%`);
 
@@ -182,23 +193,21 @@ class HAAreaToggle extends QuickMenuToggle {
                     });
 
                     sliderItem.add_child(slider);
-                    sliderItem.add_child(brightLabel); // Agregamos la etiqueta
+                    sliderItem.add_child(brightLabel);
                     sliderItem.visible = isOn;
                     
                     this.menu.addMenuItem(sliderItem);
                 }
-            } else {
-                // --- LÓGICA DE CLIMA (Temperatura y Modos) ---
+            } else if (isClimate) {
                 let minTemp = attrs.min_temp !== undefined ? attrs.min_temp : 16;
                 let maxTemp = attrs.max_temp !== undefined ? attrs.max_temp : 32;
-                let range = (maxTemp - minTemp) || 1; // Previene divisiones por cero
+                let range = (maxTemp - minTemp) || 1;
 
                 let currentTemp = attrs.temperature !== undefined ? attrs.temperature : minTemp;
                 currentTemp = Math.max(minTemp, Math.min(maxTemp, currentTemp));
 
                 sliderItem = new PopupMenu.PopupBaseMenuItem({ activate: false });
-                // CAMBIO: Ícono solicitado
-                let icon = new St.Icon({ icon_name: 'power-profile-performance-symbolic', style_class: 'popup-menu-icon' });
+                let icon = new St.Icon({ icon_name: 'power-profile-power-saver-symbolic', style_class: 'popup-menu-icon' });
                 sliderItem.add_child(icon);
 
                 let initialSliderValue = (currentTemp - minTemp) / range;
@@ -233,9 +242,7 @@ class HAAreaToggle extends QuickMenuToggle {
                 sliderItem.visible = isOn;
                 this.menu.addMenuItem(sliderItem);
 
-                // Botones de Modo (Frío, Calor, etc)
                 let modes = Array.isArray(attrs.hvac_modes) ? attrs.hvac_modes : [];
-                // CAMBIO: Filtramos el modo 'off'
                 modes = modes.filter(m => m !== 'off');
 
                 if (modes.length > 0) {
@@ -291,24 +298,101 @@ class HAAreaToggle extends QuickMenuToggle {
                     modeItem.visible = isOn;
                     this.menu.addMenuItem(modeItem);
                 }
+            } else if (isMedia) {
+                let currentVolume = attrs.volume_level !== undefined ? attrs.volume_level : 0;
+
+                sliderItem = new PopupMenu.PopupBaseMenuItem({ activate: false });
+                let icon = new St.Icon({ icon_name: 'audio-volume-high-symbolic', style_class: 'popup-menu-icon' });
+                sliderItem.add_child(icon);
+
+                slider = new Slider(currentVolume);
+                slider.x_expand = true;
+
+                brightLabel = new St.Label({
+                    text: `${Math.round(currentVolume * 100)}%`,
+                    y_align: Clutter.ActorAlign.CENTER,
+                    style: 'margin-left: 10px; font-weight: bold;'
+                });
+
+                let timeoutId = null;
+                slider.connect('notify::value', () => {
+                    if (this._syncing) return;
+
+                    let p = Math.round(slider.value * 100);
+                    brightLabel.set_text(`${p}%`);
+
+                    if (timeoutId) GLib.source_remove(timeoutId);
+                    timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+                        haRequest(url, token, '/api/services/media_player/volume_set', 'POST', {
+                            entity_id: entity.entity_id, volume_level: slider.value
+                        }).catch(e => console.error(`[HA Ext] Fallo volumen: ${e.message}`));
+                        timeoutId = null;
+                        return GLib.SOURCE_REMOVE;
+                    });
+                });
+
+                sliderItem.add_child(slider);
+                sliderItem.add_child(brightLabel);
+                sliderItem.visible = isOn;
+                this.menu.addMenuItem(sliderItem);
+
+                modeItem = new PopupMenu.PopupBaseMenuItem({ activate: false });
+                let modeBox = new St.BoxLayout({ x_expand: true });
+                modeBox.style = 'padding: 4px 12px; margin-bottom: 6px;';
+
+                let createMediaBtn = (iconName, service) => {
+                    let btn = new St.Button({ style_class: 'button', can_focus: true, x_expand: true });
+                    btn.style = 'margin: 0 4px; border-radius: 8px; padding: 4px;';
+
+                    let btnIcon = new St.Icon({ icon_name: iconName, icon_size: 16 });
+                    btnIcon.x_align = Clutter.ActorAlign.CENTER;
+                    btn.set_child(btnIcon);
+
+                    btn.connect('clicked', () => {
+                        if (service === 'media_play_pause') {
+                            let isPlaying = btnIcon.icon_name === 'media-playback-pause-symbolic';
+                            btnIcon.icon_name = isPlaying ? 'media-playback-start-symbolic' : 'media-playback-pause-symbolic';
+                        }
+
+                        haRequest(url, token, `/api/services/media_player/${service}`, 'POST', { entity_id: entity.entity_id })
+                            .catch(e => console.error(`[HA Ext] Fallo media ${service}: ${e.message}`));
+                    });
+                    return { btn, btnIcon };
+                };
+
+                let prevBtn = createMediaBtn('media-skip-backward-symbolic', 'media_previous_track');
+
+                let playIconName = entity.state === 'playing' ? 'media-playback-pause-symbolic' : 'media-playback-start-symbolic';
+                let playPauseWrap = createMediaBtn(playIconName, 'media_play_pause');
+                playIcon = playPauseWrap.btnIcon;
+
+                let nextBtn = createMediaBtn('media-skip-forward-symbolic', 'media_next_track');
+
+                modeBox.add_child(prevBtn.btn);
+                modeBox.add_child(playPauseWrap.btn);
+                modeBox.add_child(nextBtn.btn);
+
+                modeItem.add_child(modeBox);
+                modeItem.visible = isOn;
+                this.menu.addMenuItem(modeItem);
             }
 
             switchItem.connect('toggled', (item, state) => {
                 if (this._syncing) return;
-                let domain = isClimate ? 'climate' : 'light';
+                let domain = isClimate ? 'climate' : (isMedia ? 'media_player' : 'light');
                 let service = state ? 'turn_on' : 'turn_off';
 
                 if (sliderItem) {
                     sliderItem.visible = state;
-                    if (state && slider.value === 0 && !isClimate) slider.value = 0.5;
+                    if (state && slider.value === 0 && isLight) slider.value = 0.5;
                 }
                 if (modeItem) modeItem.visible = state;
 
                 let areaAnyLightOn = false;
                 for (let id in this._entityWidgets) {
                     let w = this._entityWidgets[id];
-                    let widgetState = (id === entity.entity_id) ? state : w.switchItem.state;
-                    if (!w.isClimate && widgetState) {
+                    let widgetState = (id === entity.entity_id) ? state : (w.switchItem.state || false);
+                    if (w.isLight && widgetState) {
                         areaAnyLightOn = true;
                         break;
                     }
@@ -320,16 +404,13 @@ class HAAreaToggle extends QuickMenuToggle {
 
                 haRequest(url, token, `/api/services/${domain}/${service}`, 'POST', { entity_id: entity.entity_id })
                     .then(response => {
-                        // NUEVO: Al encender el clima, averiguamos en qué modo quedó para pintarlo automáticamente
                         if (isClimate && state) {
                             let applyClimateState = (newState) => {
                                 if (!newState || !newState.state) return;
-                                // Pintar el botón del modo correcto
                                 if (modeButtons) {
                                     for (let m in modeButtons) modeButtons[m].set_checked(false);
                                     if (modeButtons[newState.state]) modeButtons[newState.state].set_checked(true);
                                 }
-                                // Actualizar temperatura si aplica
                                 if (newState.attributes && newState.attributes.temperature && tempLabel && slider) {
                                     let minTemp = newState.attributes.min_temp !== undefined ? newState.attributes.min_temp : 16;
                                     let maxTemp = newState.attributes.max_temp !== undefined ? newState.attributes.max_temp : 32;
@@ -343,12 +424,10 @@ class HAAreaToggle extends QuickMenuToggle {
                                 }
                             };
 
-                            // Intentamos leer el modo directo de la respuesta inmediata
                             let updatedEntity = Array.isArray(response) ? response.find(e => e.entity_id === entity.entity_id) : null;
                             if (updatedEntity && updatedEntity.state && updatedEntity.state !== 'off') {
                                 applyClimateState(updatedEntity);
                             } else {
-                                // Fallback: consultamos a la API medio segundo después por si la integración del aire es lenta
                                 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
                                     haRequest(url, token, `/api/states/${entity.entity_id}`)
                                         .then(applyClimateState)
@@ -361,7 +440,7 @@ class HAAreaToggle extends QuickMenuToggle {
                     .catch(e => console.error(`[HA Ext] Fallo estado: ${e.message}`));
             });
 
-            this._entityWidgets[entity.entity_id] = { switchItem, sliderItem, slider, tempLabel, brightLabel, modeItem, modeButtons, isClimate };
+            this._entityWidgets[entity.entity_id] = { switchItem, sliderItem, slider, tempLabel, brightLabel, modeItem, modeButtons, playIcon, isLight, isClimate, isMedia };
         });
 
         this._syncing = true;
@@ -378,13 +457,23 @@ class HAAreaToggle extends QuickMenuToggle {
 
         if (lightIds.length > 0) {
             haRequest(url, token, `/api/services/light/${service}`, 'POST', { entity_id: lightIds })
+                .then(() => {
+                    if (targetState) {
+                        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+                            haRequest(url, token, '/api/states')
+                                .then(states => this.updateStates(states))
+                                .catch(e => {});
+                            return GLib.SOURCE_REMOVE;
+                        });
+                    }
+                })
                 .catch(e => console.error(`[HA Ext] Fallo toggleAll luces: ${e.message}`));
         }
 
         this._areaEntities.forEach(entity => {
             if (entity.entity_id.startsWith('light.')) {
                 let widgets = this._entityWidgets[entity.entity_id];
-                if (widgets) {
+                if (widgets && widgets.switchItem.setToggleState) {
                     this._syncing = true;
                     widgets.switchItem.setToggleState(targetState);
                     if (widgets.sliderItem) widgets.sliderItem.visible = targetState;
@@ -402,18 +491,21 @@ class HAAreaToggle extends QuickMenuToggle {
             let widgets = this._entityWidgets[s.entity_id];
             if (widgets) {
                 let isClimate = widgets.isClimate;
-                let isOn = isClimate ? (s.state !== 'off' && s.state !== 'unavailable') : (s.state === 'on');
+                let isMedia = widgets.isMedia;
+                let isLight = widgets.isLight;
+                let isOn = (isClimate || isMedia) ? (s.state !== 'off' && s.state !== 'unavailable') : (s.state === 'on');
 
-                if (!isClimate && isOn) anyLightOn = true;
+                if (isLight && isOn) anyLightOn = true;
 
-                widgets.switchItem.setToggleState(isOn);
+                if (widgets.switchItem.setToggleState) {
+                    widgets.switchItem.setToggleState(isOn);
+                }
 
                 if (widgets.sliderItem) {
                     widgets.sliderItem.visible = isOn;
                     if (isOn) {
-                        if (!isClimate && s.attributes.brightness) {
+                        if (isLight && s.attributes.brightness !== undefined) {
                             widgets.slider.value = s.attributes.brightness / 255;
-                            // NUEVO: Sincronizar etiqueta de brillo cuando viene de HA
                             if (widgets.brightLabel) {
                                 let p = Math.round((s.attributes.brightness / 255) * 100);
                                 widgets.brightLabel.set_text(`${p}%`);
@@ -426,14 +518,24 @@ class HAAreaToggle extends QuickMenuToggle {
 
                             widgets.slider.value = Math.max(0, Math.min(1, (currentTemp - minTemp) / range));
                             if (widgets.tempLabel) widgets.tempLabel.set_text(`${currentTemp}°`);
+                        } else if (isMedia && s.attributes.volume_level !== undefined) {
+                            widgets.slider.value = s.attributes.volume_level;
+                            if (widgets.brightLabel) {
+                                let p = Math.round(s.attributes.volume_level * 100);
+                                widgets.brightLabel.set_text(`${p}%`);
+                            }
                         }
                     }
                 }
 
-                if (widgets.modeItem && widgets.modeButtons) {
+                if (widgets.modeItem) {
                     widgets.modeItem.visible = isOn;
-                    for (let m in widgets.modeButtons) {
-                        widgets.modeButtons[m].set_checked(s.state === m);
+                    if (isClimate && widgets.modeButtons) {
+                        for (let m in widgets.modeButtons) {
+                            widgets.modeButtons[m].set_checked(s.state === m);
+                        }
+                    } else if (isMedia && widgets.playIcon) {
+                        widgets.playIcon.icon_name = s.state === 'playing' ? 'media-playback-pause-symbolic' : 'media-playback-start-symbolic';
                     }
                 }
             }
@@ -519,7 +621,8 @@ export default class HomeAssistantExtension extends Extension {
             const entities = states.filter(s => {
                 let isLight = s.entity_id.startsWith('light.');
                 let isClimate = s.entity_id.startsWith('climate.');
-                if (!isLight && !isClimate) return false;
+                let isMedia = s.entity_id.startsWith('media_player.');
+                if (!isLight && !isClimate && !isMedia) return false;
                 if (ignoredList.includes(s.entity_id.toLowerCase())) return false;
                 return true;
             });
@@ -528,7 +631,7 @@ export default class HomeAssistantExtension extends Extension {
 
             let areaMap = {};
             try {
-                const templateStr = "{% set ns = namespace(items={}) %}{% for s in states.light %}{% set a = area_name(s.entity_id) %}{% if a %}{% set ns.items = dict(ns.items, **{s.entity_id: a}) %}{% endif %}{% endfor %}{% for s in states.climate %}{% set a = area_name(s.entity_id) %}{% if a %}{% set ns.items = dict(ns.items, **{s.entity_id: a}) %}{% endif %}{% endfor %}{{ ns.items | to_json }}";
+                const templateStr = "{% set ns = namespace(items={}) %}{% for s in states.light %}{% set a = area_name(s.entity_id) %}{% if a %}{% set ns.items = dict(ns.items, **{s.entity_id: a}) %}{% endif %}{% endfor %}{% for s in states.climate %}{% set a = area_name(s.entity_id) %}{% if a %}{% set ns.items = dict(ns.items, **{s.entity_id: a}) %}{% endif %}{% endfor %}{% for s in states.media_player %}{% set a = area_name(s.entity_id) %}{% if a %}{% set ns.items = dict(ns.items, **{s.entity_id: a}) %}{% endif %}{% endfor %}{{ ns.items | to_json }}";
                 areaMap = await haRequest(url, token, '/api/template', 'POST', { template: templateStr });
             } catch (e) {}
 
@@ -559,7 +662,8 @@ export default class HomeAssistantExtension extends Extension {
             sortedAreas.forEach(area => {
                 if (ignoredList.includes(area.toLowerCase())) return;
 
-                let iconName = customIcons[area] || 'lightbulb-symbolic';
+                // Actualizamos también el ícono por defecto de las Áreas por si acaso
+                let iconName = customIcons[area] || 'emoji-objects-symbolic';
 
                 let toggle = new HAAreaToggle(area, groupedEntities[area], iconName, this._settings);
                 this._areaToggles.push(toggle);
