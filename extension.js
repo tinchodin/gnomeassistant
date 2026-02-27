@@ -68,9 +68,12 @@ class HAAreaToggle extends QuickMenuToggle {
         this._areaEntities = areaEntities;
         this._entityWidgets = {};
         this._syncing = false;
+        this._timeoutIds = new Set();
 
         this.menu.setHeader(iconName, areaName);
         this._buildEntities();
+
+        this.connect('destroy', () => this._clearTimeouts());
 
         // Main action: toggle all lights in this area
         this.connect('notify::checked', () => {
@@ -92,6 +95,30 @@ class HAAreaToggle extends QuickMenuToggle {
             }
             return Clutter.EVENT_PROPAGATE;
         });
+    }
+
+    _addTimeout(delayMs, callback) {
+        const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delayMs, () => {
+            this._timeoutIds.delete(id);
+            return callback();
+        });
+        this._timeoutIds.add(id);
+        return id;
+    }
+
+    _removeTimeout(id) {
+        if (!id) return;
+        if (this._timeoutIds.has(id)) {
+            this._timeoutIds.delete(id);
+            GLib.source_remove(id);
+        }
+    }
+
+    _clearTimeouts() {
+        for (const id of this._timeoutIds) {
+            GLib.source_remove(id);
+        }
+        this._timeoutIds.clear();
     }
 
     _buildEntities() {
@@ -181,8 +208,8 @@ class HAAreaToggle extends QuickMenuToggle {
                         let p = Math.round(slider.value * 100);
                         brightLabel.set_text(`${p}%`);
 
-                        if (timeoutId) GLib.source_remove(timeoutId);
-                        timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+                        if (timeoutId) this._removeTimeout(timeoutId);
+                        timeoutId = this._addTimeout(300, () => {
                             let haBrightness = Math.round(slider.value * 255);
                             haRequest(url, token, '/api/services/light/turn_on', 'POST', {
                                 entity_id: entity.entity_id, brightness: haBrightness
@@ -227,8 +254,8 @@ class HAAreaToggle extends QuickMenuToggle {
                     let temp = Math.round(slider.value * range) + minTemp;
                     tempLabel.set_text(`${temp}°`);
 
-                    if (timeoutId) GLib.source_remove(timeoutId);
-                    timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+                    if (timeoutId) this._removeTimeout(timeoutId);
+                    timeoutId = this._addTimeout(400, () => {
                         haRequest(url, token, '/api/services/climate/set_temperature', 'POST', {
                             entity_id: entity.entity_id, temperature: temp
                         }).catch(e => console.error(`[HA Ext] Temperature update failed: ${e.message}`));
@@ -321,8 +348,8 @@ class HAAreaToggle extends QuickMenuToggle {
                     let p = Math.round(slider.value * 100);
                     brightLabel.set_text(`${p}%`);
 
-                    if (timeoutId) GLib.source_remove(timeoutId);
-                    timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+                    if (timeoutId) this._removeTimeout(timeoutId);
+                    timeoutId = this._addTimeout(300, () => {
                         haRequest(url, token, '/api/services/media_player/volume_set', 'POST', {
                             entity_id: entity.entity_id, volume_level: slider.value
                         }).catch(e => console.error(`[HA Ext] Volume update failed: ${e.message}`));
@@ -428,7 +455,7 @@ class HAAreaToggle extends QuickMenuToggle {
                             if (updatedEntity && updatedEntity.state && updatedEntity.state !== 'off') {
                                 applyClimateState(updatedEntity);
                             } else {
-                                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+                                this._addTimeout(500, () => {
                                     haRequest(url, token, `/api/states/${entity.entity_id}`)
                                         .then(applyClimateState)
                                         .catch(err => {});
@@ -459,7 +486,7 @@ class HAAreaToggle extends QuickMenuToggle {
             haRequest(url, token, `/api/services/light/${service}`, 'POST', { entity_id: lightIds })
                 .then(() => {
                     if (targetState) {
-                        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+                        this._addTimeout(500, () => {
                             haRequest(url, token, '/api/states')
                                 .then(states => this.updateStates(states))
                                 .catch(e => {});

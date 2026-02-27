@@ -57,6 +57,22 @@ From extension preferences:
 - `Show separator`: Show/hide the visual separator.
 - `Icon Customization`: Select icons per discovered area.
 
+## Development Quick Tips
+
+- Reload extension after changes with:
+`gnome-extensions disable gnomeassistant@tinchodin.uy`
+and then:
+`gnome-extensions enable gnomeassistant@tinchodin.uy`
+- View logs with:
+`journalctl /usr/bin/gnome-shell -f`
+
+## Publishing
+
+- Build upload bundle:
+`./scripts/pack-for-ego.sh`
+- Submission checklist and upload flow:
+`docs/EGO_SUBMISSION.md`
+
 ## Disclaimer
 
 This project was built with the help of Artificial Intelligence (AI), including support for implementation, UI refinements, and documentation.
