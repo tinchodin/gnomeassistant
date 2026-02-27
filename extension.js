@@ -11,11 +11,11 @@ import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { QuickMenuToggle, SystemIndicator } from 'resource:///org/gnome/shell/ui/quickSettings.js';
 import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 
-// --- FUNCIÓN DE PETICIÓN A LA API ---
+// API request helper
 function haRequest(url, token, endpoint, method = 'GET', data = null) {
     return new Promise((resolve, reject) => {
         if (!url || !token) {
-            return reject(new Error('Faltan credenciales'));
+            return reject(new Error('Missing credentials'));
         }
 
         let cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
@@ -24,7 +24,7 @@ function haRequest(url, token, endpoint, method = 'GET', data = null) {
         let session = new Soup.Session();
         let message = Soup.Message.new(method, fullPath);
 
-        if (!message) return reject(new Error('URL mal formateada'));
+        if (!message) return reject(new Error('Malformed URL'));
 
         message.request_headers.append('Authorization', `Bearer ${token}`);
         message.request_headers.append('Content-Type', 'application/json');
@@ -54,7 +54,7 @@ function haRequest(url, token, endpoint, method = 'GET', data = null) {
     });
 }
 
-// --- BOTÓN INDIVIDUAL POR ÁREA ---
+// Per-area toggle
 const HAAreaToggle = GObject.registerClass(
 class HAAreaToggle extends QuickMenuToggle {
     constructor(areaName, areaEntities, iconName, settings) {
@@ -72,7 +72,7 @@ class HAAreaToggle extends QuickMenuToggle {
         this.menu.setHeader(iconName, areaName);
         this._buildEntities();
 
-        // ACCIÓN PRINCIPAL: Toggle de toda el área (SOLO LUCES)
+        // Main action: toggle all lights in this area
         this.connect('notify::checked', () => {
             if (this._syncing) return;
             const targetState = this.checked;
@@ -112,8 +112,8 @@ class HAAreaToggle extends QuickMenuToggle {
             let attrs = entity.attributes || {};
             let switchItem = new PopupMenu.PopupSwitchMenuItem(name, isOn);
             
-            // CORRECCIÓN: Aplicamos los íconos exactos que pediste y forzamos el tamaño a 16px
-            let deviceIconName = 'emoji-objects-symbolic'; // Bombilla de luz
+            // Use consistent device icons and enforce a 16px size
+            let deviceIconName = 'emoji-objects-symbolic'; // Light bulb icon
             if (isClimate) deviceIconName = 'power-profile-power-saver-symbolic';
             if (isMedia) deviceIconName = 'applications-multimedia-symbolic';
 
@@ -186,7 +186,7 @@ class HAAreaToggle extends QuickMenuToggle {
                             let haBrightness = Math.round(slider.value * 255);
                             haRequest(url, token, '/api/services/light/turn_on', 'POST', {
                                 entity_id: entity.entity_id, brightness: haBrightness
-                            }).catch(e => console.error(`[HA Ext] Fallo brillo: ${e.message}`));
+                            }).catch(e => console.error(`[HA Ext] Brightness update failed: ${e.message}`));
                             timeoutId = null;
                             return GLib.SOURCE_REMOVE;
                         });
@@ -231,7 +231,7 @@ class HAAreaToggle extends QuickMenuToggle {
                     timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
                         haRequest(url, token, '/api/services/climate/set_temperature', 'POST', {
                             entity_id: entity.entity_id, temperature: temp
-                        }).catch(e => console.error(`[HA Ext] Fallo temperatura: ${e.message}`));
+                        }).catch(e => console.error(`[HA Ext] Temperature update failed: ${e.message}`));
                         timeoutId = null;
                         return GLib.SOURCE_REMOVE;
                     });
@@ -287,7 +287,7 @@ class HAAreaToggle extends QuickMenuToggle {
 
                             haRequest(url, token, '/api/services/climate/set_hvac_mode', 'POST', {
                                 entity_id: entity.entity_id, hvac_mode: mode
-                            }).catch(e => console.error(`[HA Ext] Fallo modo: ${e.message}`));
+                            }).catch(e => console.error(`[HA Ext] HVAC mode update failed: ${e.message}`));
                         });
 
                         modeButtons[mode] = btn;
@@ -325,7 +325,7 @@ class HAAreaToggle extends QuickMenuToggle {
                     timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
                         haRequest(url, token, '/api/services/media_player/volume_set', 'POST', {
                             entity_id: entity.entity_id, volume_level: slider.value
-                        }).catch(e => console.error(`[HA Ext] Fallo volumen: ${e.message}`));
+                        }).catch(e => console.error(`[HA Ext] Volume update failed: ${e.message}`));
                         timeoutId = null;
                         return GLib.SOURCE_REMOVE;
                     });
@@ -355,7 +355,7 @@ class HAAreaToggle extends QuickMenuToggle {
                         }
 
                         haRequest(url, token, `/api/services/media_player/${service}`, 'POST', { entity_id: entity.entity_id })
-                            .catch(e => console.error(`[HA Ext] Fallo media ${service}: ${e.message}`));
+                            .catch(e => console.error(`[HA Ext] Media action failed (${service}): ${e.message}`));
                     });
                     return { btn, btnIcon };
                 };
@@ -437,7 +437,7 @@ class HAAreaToggle extends QuickMenuToggle {
                             }
                         }
                     })
-                    .catch(e => console.error(`[HA Ext] Fallo estado: ${e.message}`));
+                    .catch(e => console.error(`[HA Ext] State update failed: ${e.message}`));
             });
 
             this._entityWidgets[entity.entity_id] = { switchItem, sliderItem, slider, tempLabel, brightLabel, modeItem, modeButtons, playIcon, isLight, isClimate, isMedia };
@@ -467,7 +467,7 @@ class HAAreaToggle extends QuickMenuToggle {
                         });
                     }
                 })
-                .catch(e => console.error(`[HA Ext] Fallo toggleAll luces: ${e.message}`));
+                .catch(e => console.error(`[HA Ext] Bulk light toggle failed: ${e.message}`));
         }
 
         this._areaEntities.forEach(entity => {
@@ -546,7 +546,7 @@ class HAAreaToggle extends QuickMenuToggle {
     }
 });
 
-// --- INDICADOR DEL SISTEMA (Contenedor invisible) ---
+// System indicator container
 const HAIndicator = GObject.registerClass(
 class HAIndicator extends SystemIndicator {
     constructor() {
@@ -557,7 +557,7 @@ class HAIndicator extends SystemIndicator {
     }
 });
 
-// --- CLASE PRINCIPAL DE LA EXTENSIÓN ---
+// Main extension class
 export default class HomeAssistantExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
@@ -576,7 +576,7 @@ export default class HomeAssistantExtension extends Extension {
                     const states = await haRequest(url, token, '/api/states');
                     this._areaToggles.forEach(toggle => toggle.updateStates(states));
                 } catch (e) {
-                    console.error(`[HA Ext] Fallo actualizando estados globales: ${e.message}`);
+                    console.error(`[HA Ext] Failed to refresh global states: ${e.message}`);
                 }
             }
         });
@@ -637,18 +637,14 @@ export default class HomeAssistantExtension extends Extension {
 
             const groupedEntities = {};
             entities.forEach(entity => {
-                let area = areaMap[entity.entity_id] || 'Otros';
-                if (area === 'Otros') {
-                    let parts = entity.entity_id.split('.')[1].split('_');
-                    if (parts.length > 1) area = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
-                }
+                let area = areaMap[entity.entity_id] || 'Other';
                 if (!groupedEntities[area]) groupedEntities[area] = [];
                 groupedEntities[area].push(entity);
             });
 
             const sortedAreas = Object.keys(groupedEntities).sort((a, b) => {
-                if (a === 'Otros') return 1;
-                if (b === 'Otros') return -1;
+                if (a === 'Other') return 1;
+                if (b === 'Other') return -1;
                 return a.localeCompare(b);
             });
 
@@ -662,7 +658,7 @@ export default class HomeAssistantExtension extends Extension {
             sortedAreas.forEach(area => {
                 if (ignoredList.includes(area.toLowerCase())) return;
 
-                // Actualizamos también el ícono por defecto de las Áreas por si acaso
+                // Apply a fallback icon for each area when none is configured
                 let iconName = customIcons[area] || 'emoji-objects-symbolic';
 
                 let toggle = new HAAreaToggle(area, groupedEntities[area], iconName, this._settings);
@@ -673,7 +669,7 @@ export default class HomeAssistantExtension extends Extension {
             Main.panel.statusArea.quickSettings.addExternalIndicator(this._indicator);
 
         } catch (e) {
-            console.error(`[HA Ext] Falló _buildLayout: ${e.message}`);
+            console.error(`[HA Ext] _buildLayout failed: ${e.message}`);
         }
     }
 

@@ -4,32 +4,32 @@
     
     <key name="ha-url" type="s">
       <default>""</default>
-      <summary>URL de Home Assistant</summary>
-      <description>La dirección de tu servidor, ej: http://192.168.1.100:8123</description>
+      <summary>Home Assistant URL</summary>
+      <description>Your server address, for example: http://192.168.1.100:8123</description>
     </key>
     
     <key name="ha-token" type="s">
       <default>""</default>
-      <summary>Token de Acceso (Long-Lived)</summary>
-      <description>El token generado desde tu perfil en Home Assistant</description>
+      <summary>Long-Lived Access Token</summary>
+      <description>The token generated from your Home Assistant profile</description>
     </key>
 
     <key name="ignored-items" type="s">
       <default>""</default>
-      <summary>Elementos ignorados</summary>
-      <description>Áreas o entity_ids separados por coma (ej: light.patio, Otros)</description>
+      <summary>Ignored items</summary>
+      <description>Areas or entity IDs separated by commas (for example: light.patio, Other)</description>
     </key>
 
     <key name="discovered-areas" type="s">
       <default>""</default>
-      <summary>Áreas descubiertas</summary>
-      <description>Lista interna de áreas encontradas por la extensión</description>
+      <summary>Discovered areas</summary>
+      <description>Internal list of areas discovered by the extension</description>
     </key>
 
     <key name="custom-icons" type="s">
       <default>"{}"</default>
-      <summary>Íconos personalizados</summary>
-      <description>Mapeo JSON de áreas a íconos seleccionados por el usuario</description>
+      <summary>Custom icons</summary>
+      <description>JSON mapping of areas to user-selected icons</description>
     </key>
 
   </schema>
