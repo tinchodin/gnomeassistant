@@ -2,6 +2,8 @@
 
 GNOME Shell extension to control Home Assistant from Quick Settings.
 
+<img width="407" height="1042" alt="Screenshot From 2026-03-12 11-17-47" src="https://github.com/user-attachments/assets/22cefc8a-b11e-45e4-8bad-24b037756aa5" />
+
 ## What This Project Does
 
 `GNOME Assistant` adds Home Assistant controls to the GNOME panel, integrated into the Quick Settings menu.
